@@ -1,0 +1,30 @@
+{
+  "extends": [
+    "config:recommended",
+    ":disableDependencyDashboard",
+    "helpers:pinGitHubActionDigests",
+    "customManagers:dockerfileVersions",
+    "customManagers:githubActionsVersions"
+  ],
+  "packageRules": [
+    {
+      "description": "Automerge GitHub Actions updates within the same major version (new SHA, minor, patch) once all checks are green",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["digest", "minor", "patch"],
+      "automerge": true
+    },
+    {
+      "description": "Automerge patch updates of all other dependencies once all checks are green",
+      "matchUpdateTypes": ["patch"],
+      "automerge": true
+    },
+    {
+      "description": "The runner base image: every release (also minor) becomes a new image, GitHub stops sending jobs to outdated runners",
+      "matchManagers": ["dockerfile"],
+      "matchDepNames": ["ghcr.io/actions/actions-runner"],
+      "matchUpdateTypes": ["digest", "minor", "patch"],
+      "automerge": true
+    }
+  ],
+  "platformAutomerge": false
+}

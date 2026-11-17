@@ -1,0 +1,2 @@
+ignored:
+  - DL3008 # apt packages follow the base image, renovate bumps the base image

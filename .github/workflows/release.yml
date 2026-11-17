@@ -1,0 +1,132 @@
+# Shared release flow, see https://github.com/spali/.github
+# prepare (shared) -> build (push the image, version from prepare) -> publish (shared).
+# Image tags: release X.Y.Z, X.Y, X, latest; main X.Y.Z-next, next; dev build X.Y.Z-pr.N.
+# Release assets: image.txt (reference with digest) and compose.yml for this version.
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+      - "!v*-next"
+      - "!v*-pr.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Exception version for the draft, only on main (e.g. 2.0.0-rc.1). Empty: computed from the labels."
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  prepare:
+    permissions:
+      contents: write # update the draft release
+      pull-requests: read
+      actions: read # the tag check waits for the run on main
+    uses: spali/.github/.github/workflows/release-prepare.yml@d08f9ea4fbba1d7d08ffcd08f8be0b12e4f92459 # v3.1.0
+    with:
+      version: ${{ inputs.version }}
+
+  build:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 45 # arm64 is emulated
+    permissions:
+      contents: read
+      packages: write # push the image
+      id-token: write # sign the image attestation
+      attestations: write # store the image attestation
+      artifact-metadata: write # create the artifact storage record
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}
+      KIND: ${{ needs.prepare.outputs.kind }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to ghcr.io
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Tags and labels
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ env.VERSION }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.VERSION }},enable=${{ env.KIND == 'release' }}
+            type=semver,pattern={{major}},value=${{ env.VERSION }},enable=${{ env.KIND == 'release' }}
+            type=raw,value=latest,enable=${{ env.KIND == 'release' }}
+            type=raw,value=next,enable=${{ env.KIND == 'next' }}
+          labels: |
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.revision=${{ needs.prepare.outputs.sha }}
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Attest the image
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Release assets
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p dist
+          printf '%s:%s@%s\n' "$IMAGE" "$VERSION" "$DIGEST" >dist/image.txt
+          sed "s|image: .*|image: $IMAGE:$VERSION|" compose.yml >dist/compose.yml
+          cat dist/image.txt
+      - name: Upload the release assets
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-assets
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: [prepare, build]
+    permissions:
+      contents: write # create and edit releases
+      pull-requests: write # comment the dev build link
+      id-token: write # sign the attestation
+      attestations: write # store the attestation
+      artifact-metadata: write # create the artifact storage record
+    uses: spali/.github/.github/workflows/release-publish.yml@d08f9ea4fbba1d7d08ffcd08f8be0b12e4f92459 # v3.1.0
+    with:
+      kind: ${{ needs.prepare.outputs.kind }}
+      version: ${{ needs.prepare.outputs.version }}
+      tag: ${{ needs.prepare.outputs.tag }}
+      sha: ${{ needs.prepare.outputs.sha }}
+      pr: ${{ needs.prepare.outputs.pr }}
+      draft-id: ${{ needs.prepare.outputs.draft-id }}

@@ -1,0 +1,40 @@
+# Example: one runner per repository (user accounts have no account-wide runners,
+# organizations can use RUNNER_URL: https://github.com/ORG instead).
+#   cp .env.example .env      # set ACCESS_TOKEN
+#   docker compose up -d
+#   docker compose up -d --scale app=3   # more parallel jobs for one repository
+# Workflows use it with: runs-on: [self-hosted, linux]
+x-runner: &runner
+  image: ghcr.io/spali/docker-github-runner-linux:latest
+  restart: unless-stopped
+  init: true
+  stop_grace_period: 1m
+  env_file: .env
+  environment: &env
+    EPHEMERAL: "true"
+  # Docker in jobs (container:, services:, docker build): uncomment both. Jobs
+  # then control the host's Docker daemon, which equals root on the host.
+  # group_add: ["${DOCKER_GID:-999}"]
+  # volumes: ["/var/run/docker.sock:/var/run/docker.sock"]
+
+services:
+  app:
+    <<: *runner
+    environment:
+      <<: *env
+      RUNNER_URL: https://github.com/OWNER/REPO
+    volumes:
+      - toolcache-app:/opt/hostedtoolcache # actions/setup-* download a version only once
+
+  other:
+    <<: *runner
+    environment:
+      <<: *env
+      RUNNER_URL: https://github.com/OWNER/OTHER-REPO
+      RUNNER_LABELS: other
+    volumes:
+      - toolcache-other:/opt/hostedtoolcache
+
+volumes:
+  toolcache-app:
+  toolcache-other:
