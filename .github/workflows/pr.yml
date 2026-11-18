@@ -1,5 +1,5 @@
 # Shared release flow, see https://github.com/spali/.github
-# Labels the pull request from its title, checks it, deletes dev builds of closed pull requests.
+# Labels the pull request from its title, checks it, deletes dev builds (releases and images) of closed pull requests.
 name: Pull request
 
 on:
@@ -17,3 +17,11 @@ jobs:
       contents: write # delete dev pre-releases of closed pull requests
       pull-requests: write # add labels
     uses: spali/.github/.github/workflows/pr.yml@d08f9ea4fbba1d7d08ffcd08f8be0b12e4f92459 # v3.1.0
+
+  image-cleanup:
+    needs: pr
+    if: github.event.action == 'closed'
+    permissions:
+      contents: read
+      packages: write # delete image versions
+    uses: spali/.github/.github/workflows/image-cleanup.yml@0ecb2395de363086ae736c7ef9f7326b9b9060bc # v3.4.0

@@ -1,5 +1,6 @@
 # Shared release flow, see https://github.com/spali/.github
-# prepare (shared) -> build (push the image, version from prepare) -> publish (shared).
+# prepare (shared) -> build (push the image, version from prepare) -> publish (shared)
+# -> image-cleanup (shared: deletes dev/next image tags whose release is gone).
 # Image tags: release X.Y.Z, X.Y, X, latest; main X.Y.Z-next, next; dev build X.Y.Z-pr.N.
 # Release assets: image.txt (reference with digest) and compose.yml for this version.
 name: Release
@@ -130,3 +131,10 @@ jobs:
       sha: ${{ needs.prepare.outputs.sha }}
       pr: ${{ needs.prepare.outputs.pr }}
       draft-id: ${{ needs.prepare.outputs.draft-id }}
+
+  image-cleanup:
+    needs: publish
+    permissions:
+      contents: read
+      packages: write # delete image versions
+    uses: spali/.github/.github/workflows/image-cleanup.yml@0ecb2395de363086ae736c7ef9f7326b9b9060bc # v3.4.0
