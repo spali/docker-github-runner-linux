@@ -26,5 +26,6 @@
       "automerge": true
     }
   ],
-  "platformAutomerge": false
+  "platformAutomerge": true,
+  "automergeStrategy": "rebase"
 }
