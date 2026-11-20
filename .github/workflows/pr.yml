@@ -16,7 +16,7 @@ jobs:
     permissions:
       contents: write # delete dev pre-releases of closed pull requests
       pull-requests: write # add labels
-    uses: spali/.github/.github/workflows/pr.yml@1fabe9bdd3d7c29380dce0c7156bcfb559bc260e # v3.7.1
+    uses: spali/.github/.github/workflows/pr.yml@db96245cb85489fe8bd5b8a00ec05a030fb6e97e # v5.9.0
 
   image-cleanup:
     needs: pr
@@ -24,4 +24,4 @@ jobs:
     permissions:
       contents: read
       packages: write # delete image versions
-    uses: spali/.github/.github/workflows/image-cleanup.yml@1fabe9bdd3d7c29380dce0c7156bcfb559bc260e # v3.7.1
+    uses: spali/.github/.github/workflows/image-cleanup.yml@db96245cb85489fe8bd5b8a00ec05a030fb6e97e # v5.9.0
